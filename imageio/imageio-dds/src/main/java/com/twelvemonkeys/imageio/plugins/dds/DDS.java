@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, Harald Kuhr
+ * Copyright (c) 2024, Paul Allen, Harald Kuhr
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,28 +28,24 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+package com.twelvemonkeys.imageio.plugins.dds;
 
-package com.twelvemonkeys.image;
+@SuppressWarnings("unused")
+interface DDS {
+    byte[] MAGIC = new byte[]{'D', 'D', 'S', ' '};
+    int HEADER_SIZE = 124;
 
-/**
- * Magick
- *
- * @author <a href="mailto:harald.kuhr@gmail.com">Harald Kuhr</a>
- * @author last modified by $Author: haku $
- * @version $Id: //depot/branches/personal/haraldk/twelvemonkeys/release-2/twelvemonkeys-core/src/main/java/com/twelvemonkeys/image/Magick.java#1 $
- */
-final class Magick {
-    static final boolean DEBUG = useDebug();
+    // Header Flags
+    int FLAG_CAPS = 0x1;              // Required in every .dds file.
+    int FLAG_HEIGHT = 0x2;            // Required in every .dds file.
+    int FLAG_WIDTH = 0x4;             // Required in every .dds file.
+    int FLAG_PITCH = 0x8;             // Required when pitch is provided for an uncompressed texture.
+    int FLAG_PIXELFORMAT = 0x1000;    // Required in every .dds file.
+    int FLAG_MIPMAPCOUNT = 0x20000;   // Required in a mipmapped texture.
+    int FLAG_LINEARSIZE = 0x80000;    // Required when pitch is provided for a compressed texture.
+    int FLAG_DEPTH = 0x800000;        // Required in a depth texture.
 
-    private static boolean useDebug() {
-        try {
-            return "TRUE".equalsIgnoreCase(System.getProperty("com.twelvemonkeys.image.magick.debug"));
-        }
-        catch (Throwable t) {
-            // Most probably in case of a SecurityManager
-            return false;
-        }
-    }
-
-    private Magick() {}
+    // Pixel Format Flags
+    int PIXEL_FORMAT_FLAG_FOURCC = 0x04;
+    int PIXEL_FORMAT_FLAG_RGB = 0x40;
 }

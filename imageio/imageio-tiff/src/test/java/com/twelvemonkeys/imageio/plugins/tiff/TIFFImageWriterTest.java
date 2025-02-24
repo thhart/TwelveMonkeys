@@ -34,13 +34,13 @@ import com.twelvemonkeys.imageio.metadata.Directory;
 import com.twelvemonkeys.imageio.metadata.Entry;
 import com.twelvemonkeys.imageio.metadata.tiff.Rational;
 import com.twelvemonkeys.imageio.metadata.tiff.TIFF;
+import com.twelvemonkeys.imageio.metadata.tiff.TIFFEntry;
 import com.twelvemonkeys.imageio.metadata.tiff.TIFFReader;
 import com.twelvemonkeys.imageio.stream.ByteArrayImageInputStream;
 import com.twelvemonkeys.imageio.util.ImageTypeSpecifiers;
 import com.twelvemonkeys.imageio.util.ImageWriterAbstractTest;
 import com.twelvemonkeys.io.FastByteArrayOutputStream;
 
-import org.junit.Test;
 import org.w3c.dom.NodeList;
 
 import javax.imageio.IIOImage;
@@ -73,11 +73,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import static com.twelvemonkeys.imageio.metadata.tiff.TIFF.TAG_X_RESOLUTION;
+import static com.twelvemonkeys.imageio.metadata.tiff.TIFF.TAG_Y_RESOLUTION;
 import static com.twelvemonkeys.imageio.plugins.tiff.TIFFImageMetadataFormat.SUN_NATIVE_IMAGE_METADATA_FORMAT_NAME;
 import static com.twelvemonkeys.imageio.plugins.tiff.TIFFImageMetadataTest.createTIFFFieldNode;
 import static com.twelvemonkeys.imageio.util.ImageReaderAbstractTest.assertRGBEquals;
-import static org.junit.Assert.*;
-import static org.junit.Assume.assumeNotNull;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.*;
 
 /**
@@ -133,8 +136,8 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
             customMeta.appendChild(ifd);
 
             createTIFFFieldNode(ifd, TIFF.TAG_RESOLUTION_UNIT, TIFF.TYPE_SHORT, resolutionUnitValue);
-            createTIFFFieldNode(ifd, TIFF.TAG_X_RESOLUTION, TIFF.TYPE_RATIONAL, resolutionValue);
-            createTIFFFieldNode(ifd, TIFF.TAG_Y_RESOLUTION, TIFF.TYPE_RATIONAL, resolutionValue);
+            createTIFFFieldNode(ifd, TAG_X_RESOLUTION, TIFF.TYPE_RATIONAL, resolutionValue);
+            createTIFFFieldNode(ifd, TAG_Y_RESOLUTION, TIFF.TYPE_RATIONAL, resolutionValue);
 
             metadata.mergeTree(nativeFormat, customMeta);
 
@@ -145,7 +148,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
             fail(e.getMessage());
         }
 
-        assertTrue("No image data written", buffer.size() > 0);
+        assertTrue(buffer.size() > 0, "No image data written");
 
         Directory ifds = new TIFFReader().read(new ByteArrayImageInputStream(buffer.toByteArray()));
 
@@ -153,11 +156,11 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
         assertNotNull(resolutionUnit);
         assertEquals(resolutionUnitValue, ((Number) resolutionUnit.getValue()).intValue());
 
-        Entry xResolution = ifds.getEntryById(TIFF.TAG_X_RESOLUTION);
+        Entry xResolution = ifds.getEntryById(TAG_X_RESOLUTION);
         assertNotNull(xResolution);
         assertEquals(resolutionValue, xResolution.getValue());
 
-        Entry yResolution = ifds.getEntryById(TIFF.TAG_Y_RESOLUTION);
+        Entry yResolution = ifds.getEntryById(TAG_Y_RESOLUTION);
         assertNotNull(yResolution);
         assertEquals(resolutionValue, yResolution.getValue());
     }
@@ -216,7 +219,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
             fail(e.getMessage());
         }
 
-        assertTrue("No image data written", buffer.size() > 0);
+        assertTrue(buffer.size() > 0, "No image data written");
 
         Directory ifds = new TIFFReader().read(new ByteArrayImageInputStream(buffer.toByteArray()));
         Entry software = ifds.getEntryById(TIFF.TAG_SOFTWARE);
@@ -264,7 +267,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
             fail(e.getMessage());
         }
 
-        assertTrue("No image data written", buffer.size() > 0);
+        assertTrue(buffer.size() > 0, "No image data written");
 
         Directory ifds = new TIFFReader().read(new ByteArrayImageInputStream(buffer.toByteArray()));
 
@@ -272,11 +275,11 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
         assertNotNull(resolutionUnit);
         assertEquals(resolutionUnitValue, ((Number) resolutionUnit.getValue()).intValue());
 
-        Entry xResolution = ifds.getEntryById(TIFF.TAG_X_RESOLUTION);
+        Entry xResolution = ifds.getEntryById(TAG_X_RESOLUTION);
         assertNotNull(xResolution);
         assertEquals(expectedResolutionValue, xResolution.getValue());
 
-        Entry yResolution = ifds.getEntryById(TIFF.TAG_Y_RESOLUTION);
+        Entry yResolution = ifds.getEntryById(TAG_Y_RESOLUTION);
         assertNotNull(yResolution);
         assertEquals(expectedResolutionValue, yResolution.getValue());
     }
@@ -315,7 +318,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
             fail(e.getMessage());
         }
 
-        assertTrue("No image data written", buffer.size() > 0);
+        assertTrue(buffer.size() > 0, "No image data written");
 
         Directory ifds = new TIFFReader().read(new ByteArrayImageInputStream(buffer.toByteArray()));
         Entry software = ifds.getEntryById(TIFF.TAG_SOFTWARE);
@@ -323,7 +326,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
         assertEquals(softwareString, software.getValueAsString());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testWriteIncompatibleCompression() throws IOException {
         ImageWriter writer = createWriter();
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
@@ -331,44 +334,42 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
         try (ImageOutputStream output = ImageIO.createImageOutputStream(buffer)) {
             writer.setOutput(output);
 
-            try {
-                ImageWriteParam param = writer.getDefaultWriteParam();
-                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-                param.setCompressionType("CCITT T.6");
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            param.setCompressionType("CCITT T.6");
+
+            // Use assertThrows to check for IOException
+            assertThrows(IllegalArgumentException.class, () -> {
                 writer.write(null, new IIOImage(new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB), null, null), param);
-                fail();
-            }
-            catch (IOException e) {
-                fail(e.getMessage());
-            }
+            });
         }
     }
 
     @Test
     public void testWriterCanWriteSequence() throws IOException {
         ImageWriter writer = createWriter();
-        assertTrue("Writer should support sequence writing", writer.canWriteSequence());
+        assertTrue(writer.canWriteSequence(), "Writer should support sequence writing");
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testWriteSequenceWithoutPrepare() throws IOException {
         ImageWriter writer = createWriter();
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
 
         try (ImageOutputStream output = ImageIO.createImageOutputStream(buffer)) {
             writer.setOutput(output);
-            writer.writeToSequence(new IIOImage(new BufferedImage(10, 10, BufferedImage.TYPE_3BYTE_BGR), null, null), null);
+            assertThrows(IllegalStateException.class, () -> writer.writeToSequence(new IIOImage(new BufferedImage(10, 10, BufferedImage.TYPE_3BYTE_BGR), null, null), null));
         }
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testEndSequenceWithoutPrepare() throws IOException {
         ImageWriter writer = createWriter();
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
 
         try (ImageOutputStream output = ImageIO.createImageOutputStream(buffer)) {
             writer.setOutput(output);
-            writer.endWriteSequence();
+            assertThrows(IllegalStateException.class, () -> writer.endWriteSequence());
         }
     }
 
@@ -419,7 +420,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
             ImageReader reader = ImageIO.getImageReaders(input).next();
             reader.setInput(input);
 
-            assertEquals("wrong image count", compression.length, reader.getNumImages(true));
+            assertEquals(compression.length, reader.getNumImages(true), "wrong image count");
 
             for (int i = 0; i < reader.getNumImages(true); i++) {
                 assertImageEquals("image " + i + " differs", image, reader.read(i), 5); // Allow room for JPEG compression
@@ -536,7 +537,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
             ImageReader reader = ImageIO.getImageReaders(input).next();
             reader.setInput(input);
 
-            assertEquals("wrong image count", images.length, reader.getNumImages(true));
+            assertEquals(images.length, reader.getNumImages(true), "wrong image count");
 
             for (int i = 0; i < reader.getNumImages(true); i++) {
                 assertImageEquals("image " + i + " differs", images[i], reader.read(i), 5); // Allow room for JPEG compression
@@ -606,7 +607,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
             TIFFImageMetadata metadata = (TIFFImageMetadata) reader.getImageMetadata(0);
             Directory ifd = metadata.getIFD();
 
-            assertNull("Unexpected ICC profile for default gray", ifd.getEntryById(TIFF.TAG_ICC_PROFILE));
+            assertNull(ifd.getEntryById(TIFF.TAG_ICC_PROFILE), "Unexpected ICC profile for default gray");
         }
     }
 
@@ -646,8 +647,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
             original = reader.readAll(0, null);
             reader.dispose();
         }
-
-        assumeNotNull(original);
+        assumeTrue(original != null);
 
         // Write it back, using same compression (copied from metadata)
         FastByteArrayOutputStream buffer = new FastByteArrayOutputStream(32768);
@@ -695,7 +695,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
                 }
             }
 
-            assertTrue("Software metadata not found", softwareFound);
+            assertTrue(softwareFound, "Software metadata not found");
         }
     }
 
@@ -712,7 +712,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
             reader.dispose();
         }
 
-        assumeNotNull(original);
+        assumeTrue(original != null);
 
         // Write it back, using deflate compression
         FastByteArrayOutputStream buffer = new FastByteArrayOutputStream(32768);
@@ -759,7 +759,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
                 }
             }
 
-            assertTrue("Software metadata not found", softwareFound);
+            assertTrue(softwareFound, "Software metadata not found");
         }
     }
 
@@ -776,7 +776,8 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
             reader.dispose();
         }
 
-        assumeNotNull(original);
+        assumeTrue(original!= null);
+
 
         // Write it back, no compression
         FastByteArrayOutputStream buffer = new FastByteArrayOutputStream(32768);
@@ -824,7 +825,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
                 }
             }
 
-            assertTrue("Software metadata not found", softwareFound);
+            assertTrue(softwareFound, "Software metadata not found");
         }
     }
 
@@ -841,7 +842,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
             reader.dispose();
         }
 
-        assumeNotNull(original);
+        assumeTrue(original != null);
 
         // Write it back, using same compression (copied from metadata)
         FastByteArrayOutputStream buffer = new FastByteArrayOutputStream(32768);
@@ -884,7 +885,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
                 }
             }
 
-            assertTrue("Software metadata not found", softwareFound);
+            assertTrue(softwareFound, "Software metadata not found");
         }
     }
 
@@ -901,7 +902,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
             reader.dispose();
         }
 
-        assumeNotNull(original);
+        assumeTrue(original != null);
 
         // Write it back, using same compression (copied from metadata)
         FastByteArrayOutputStream buffer = new FastByteArrayOutputStream(32768);
@@ -948,7 +949,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
                 }
             }
 
-            assertTrue("Software metadata not found", softwareFound);
+            assertTrue(softwareFound, "Software metadata not found");
         }
     }
 
@@ -965,7 +966,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
             reader.dispose();
         }
 
-        assumeNotNull(original);
+        assumeTrue(original != null);
 
         // Write it back, using same compression (copied from metadata)
         FastByteArrayOutputStream buffer = new FastByteArrayOutputStream(32768);
@@ -1016,7 +1017,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
                 }
             }
 
-            assertTrue("Software metadata not found", softwareFound);
+            assertTrue(softwareFound, "Software metadata not found");
         }
     }
 
@@ -1056,10 +1057,10 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
     }
 
     private void assertImageEquals(final String message, final BufferedImage expected, final BufferedImage actual, final int tolerance) {
-        assertNotNull(message, expected);
-        assertNotNull(message, actual);
-        assertEquals(message + ", widths differ", expected.getWidth(), actual.getWidth());
-        assertEquals(message + ", heights differ", expected.getHeight(), actual.getHeight());
+        assertNotNull(expected, message);
+        assertNotNull(actual, message);
+        assertEquals(expected.getWidth(), actual.getWidth(), message + ", widths differ");
+        assertEquals(expected.getHeight(), actual.getHeight(), message + ", heights differ");
 
         for (int y = 0; y < expected.getHeight(); y++) {
             for (int x = 0; x < expected.getWidth(); x++) {
@@ -1278,7 +1279,7 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
 
                     int numImages = reader.getNumImages(true);
 
-                    assertEquals("Number of pages differs from original", infos.size(), numImages);
+                    assertEquals(infos.size(), numImages, "Number of pages differs from original");
 
                     for (int i = 0; i < numImages; i++) {
                         IIOImage after = reader.readAll(i, null);
@@ -1290,17 +1291,90 @@ public class TIFFImageWriterTest extends ImageWriterAbstractTest<TIFFImageWriter
 
                         if (info.compression == TIFFExtension.COMPRESSION_OLD_JPEG) {
                             // Should rewrite this from old-style to new style
-                            assertEquals("Old JPEG compression not rewritten as JPEG", TIFFExtension.COMPRESSION_JPEG, ((Number) afterCompressionEntry.getValue()).intValue());
+                            assertEquals(TIFFExtension.COMPRESSION_JPEG, ((Number) afterCompressionEntry.getValue()).intValue(), "Old JPEG compression not rewritten as JPEG");
                         }
                         else {
-                            assertEquals("Compression differs from original", info.compression, ((Number) afterCompressionEntry.getValue()).intValue());
+                            assertEquals(info.compression, ((Number) afterCompressionEntry.getValue()).intValue(), "Compression differs from original");
                         }
 
-                        assertEquals("Image width differs from original", info.width, after.getRenderedImage().getWidth());
-                        assertEquals("Image height differs from original", info.height, after.getRenderedImage().getHeight());
+                        assertEquals(info.width, after.getRenderedImage().getWidth(), "Image width differs from original");
+                        assertEquals(info.height, after.getRenderedImage().getHeight(), "Image height differs from original");
                     }
                 }
             }
+        }
+    }
+
+    @Test
+    public void testWriteBinaryWhiteIsZero() throws IOException {
+        IndexColorModel whiteIsZero = new IndexColorModel(1, 2, new int[] {-1, 0}, 0, false, -1, DataBuffer.TYPE_BYTE);
+        BufferedImage image = new BufferedImage(10, 10, BufferedImage.TYPE_BYTE_BINARY, whiteIsZero);
+
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ImageOutputStream output = ImageIO.createImageOutputStream(bytes)) {
+            ImageWriter imageWriter = createWriter();
+            imageWriter.setOutput(output);
+            imageWriter.write(image);
+        }
+
+        Directory directory = new TIFFReader().read(new ByteArrayImageInputStream(bytes.toByteArray()));
+
+        assertNotNull(directory.getEntryById(TIFF.TAG_PHOTOMETRIC_INTERPRETATION));
+        assertEquals(TIFFBaseline.PHOTOMETRIC_WHITE_IS_ZERO, directory.getEntryById(TIFF.TAG_PHOTOMETRIC_INTERPRETATION).getValue());
+    }
+
+    @Test
+    public void testWriteBinaryBlackIsZero() throws IOException {
+        IndexColorModel blackIsZero = new IndexColorModel(1, 2, new int[] {0, -1}, 0, false, -1, DataBuffer.TYPE_BYTE);
+        BufferedImage image = new BufferedImage(10, 10, BufferedImage.TYPE_BYTE_BINARY, blackIsZero);
+
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ImageOutputStream output = ImageIO.createImageOutputStream(bytes)) {
+            ImageWriter imageWriter = createWriter();
+            imageWriter.setOutput(output);
+            imageWriter.write(image);
+        }
+
+        Directory directory = new TIFFReader().read(new ByteArrayImageInputStream(bytes.toByteArray()));
+
+        assertNotNull(directory.getEntryById(TIFF.TAG_PHOTOMETRIC_INTERPRETATION));
+        assertEquals(TIFFBaseline.PHOTOMETRIC_BLACK_IS_ZERO, directory.getEntryById(TIFF.TAG_PHOTOMETRIC_INTERPRETATION).getValue());
+    }
+
+    @Test
+    public void testWriteBinaryPalette() throws IOException {
+        IndexColorModel redAndBluePalette = new IndexColorModel(1, 2, new int[] {0xFF00FF00, 0xFF0000FF}, 0, false, -1, DataBuffer.TYPE_BYTE);
+        BufferedImage image = new BufferedImage(10, 10, BufferedImage.TYPE_BYTE_BINARY, redAndBluePalette);
+
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ImageOutputStream output = ImageIO.createImageOutputStream(bytes)) {
+            ImageWriter imageWriter = createWriter();
+            imageWriter.setOutput(output);
+            imageWriter.write(image);
+        }
+
+        Directory directory = new TIFFReader().read(new ByteArrayImageInputStream(bytes.toByteArray()));
+
+        assertNotNull(directory.getEntryById(TIFF.TAG_PHOTOMETRIC_INTERPRETATION));
+        assertEquals(TIFFBaseline.PHOTOMETRIC_PALETTE, directory.getEntryById(TIFF.TAG_PHOTOMETRIC_INTERPRETATION).getValue());
+    }
+
+    @Test
+    public void testWriteJPEGCompressedShouldNotPassMetadata() throws IOException {
+        BufferedImage image = new BufferedImage(10, 10, BufferedImage.TYPE_3BYTE_BGR);
+
+        try (ImageOutputStream output = new NullImageOutputStream()) {
+            ImageWriter imageWriter = createWriter();
+            imageWriter.setOutput(output);
+
+            ImageWriteParam param = imageWriter.getDefaultWriteParam();
+            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            param.setCompressionType("JPEG");
+
+            // From #815
+            // Prior to fix, this would throw IIOException: Metadata components != number of destination bands
+            // (empty metadata defaults to 1 channel gray, while image data is 3 channel BGR)
+            imageWriter.write(null, new IIOImage(image, null, new TIFFImageMetadata()), param);
         }
     }
 

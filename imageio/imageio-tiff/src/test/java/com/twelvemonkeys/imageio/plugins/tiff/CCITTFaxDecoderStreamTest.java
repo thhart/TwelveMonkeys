@@ -30,16 +30,16 @@
 
 package com.twelvemonkeys.imageio.plugins.tiff;
 
-import org.junit.Before;
-import org.junit.Test;
 
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.io.*;
 import java.util.Arrays;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
 
 /**
  * CCITTFaxDecoderStreamTest
@@ -138,7 +138,7 @@ public class CCITTFaxDecoderStreamTest {
     // 1 1 0 0 1 1 x x
     final BufferedImage image = new BufferedImage(6, 4, BufferedImage.TYPE_BYTE_BINARY);
 
-    @Before
+    @BeforeEach
     public void init() {
 
         for (int y = 0; y < 4; y++) {
@@ -157,8 +157,13 @@ public class CCITTFaxDecoderStreamTest {
 
         byte[] imageData = ((DataBufferByte) image.getData().getDataBuffer()).getData();
         byte[] bytes = new byte[imageData.length];
-        new DataInputStream(stream).readFully(bytes);
+
+        DataInputStream dataInputStream = new DataInputStream(stream);
+        dataInputStream.readFully(bytes);
         assertArrayEquals(imageData, bytes);
+
+        assertEquals(-1, dataInputStream.read());
+        assertEquals(-1, dataInputStream.read(new byte[1]));
     }
 
     @Test
@@ -168,8 +173,13 @@ public class CCITTFaxDecoderStreamTest {
 
         byte[] imageData = ((DataBufferByte) image.getData().getDataBuffer()).getData();
         byte[] bytes = new byte[imageData.length];
-        new DataInputStream(stream).readFully(bytes);
+
+        DataInputStream dataInputStream = new DataInputStream(stream);
+        dataInputStream.readFully(bytes);
         assertArrayEquals(imageData, bytes);
+
+        assertEquals(-1, dataInputStream.read());
+        assertEquals(-1, dataInputStream.read(new byte[1]));
     }
 
     @Test
@@ -179,8 +189,13 @@ public class CCITTFaxDecoderStreamTest {
 
         byte[] imageData = ((DataBufferByte) image.getData().getDataBuffer()).getData();
         byte[] bytes = new byte[imageData.length];
-        new DataInputStream(stream).readFully(bytes);
+
+        DataInputStream dataInputStream = new DataInputStream(stream);
+        dataInputStream.readFully(bytes);
         assertArrayEquals(imageData, bytes);
+
+        assertEquals(-1, dataInputStream.read());
+        assertEquals(-1, dataInputStream.read(new byte[1]));
     }
 
     @Test
@@ -265,7 +280,7 @@ public class CCITTFaxDecoderStreamTest {
         new DataInputStream(inputStream).readFully(data);
 
         InputStream stream = new CCITTFaxDecoderStream(new ByteArrayInputStream(data),
-                6, TIFFExtension.COMPRESSION_CCITT_T6, 0L);
+                6, 6, TIFFExtension.COMPRESSION_CCITT_T6, 0L, false);
 
         byte[] bytes = new byte[6]; // 6 x 6 pixel, 1 bpp => 6 bytes
         new DataInputStream(stream).readFully(bytes);
@@ -274,8 +289,8 @@ public class CCITTFaxDecoderStreamTest {
         byte[] imageData = Arrays.copyOf(((DataBufferByte) image.getData().getDataBuffer()).getData(), 6);
         assertArrayEquals(imageData, bytes);
 
-        // Ideally, we should have no more data now, but the stream don't know that...
-        // assertEquals("Should contain no more data", -1, stream.read());
+         assertEquals(-1, stream.read(), "Should contain no more data");
+         assertEquals(-1, stream.read(new byte[1]), "Should contain no more data");
     }
 
     @Test
@@ -355,12 +370,14 @@ public class CCITTFaxDecoderStreamTest {
     }
 
     @SuppressWarnings("StatementWithEmptyBody")
-    @Test(expected = IOException.class)
+    @Test
     public void testAIOBEInCorruptStreamShouldThrowIOException() throws IOException {
         // From #645
-        try (InputStream ccittFaxDecoderStream = new CCITTFaxDecoderStream(getResourceAsStream("/ccitt/645.ccitt"), 7, 4, 0, false)) {
-            while(ccittFaxDecoderStream.read() != -1); // Just read until the end
-        }
+        assertThrows(IOException.class, () -> {
+            try (InputStream ccittFaxDecoderStream = new CCITTFaxDecoderStream(getResourceAsStream("/ccitt/645.ccitt"), 7, 4, 0, false)) {
+                while (ccittFaxDecoderStream.read() != -1) ; // Just read until the end
+            }
+        });
     }
 
     @Test

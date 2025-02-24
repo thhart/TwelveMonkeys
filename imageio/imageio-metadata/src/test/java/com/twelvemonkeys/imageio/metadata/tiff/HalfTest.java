@@ -1,16 +1,14 @@
 package com.twelvemonkeys.imageio.metadata.tiff;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import com.twelvemonkeys.io.FastByteArrayOutputStream;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.Random;
 
-import org.junit.Test;
-
-import com.twelvemonkeys.io.FastByteArrayOutputStream;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * HalfTest.
@@ -33,6 +31,13 @@ public class HalfTest {
             short half = (short) random.nextInt(Short.MAX_VALUE & 0x3FFF);
             float floatValue = Half.shortBitsToFloat(half);
             assertEquals(half, Half.floatToShortBits(floatValue));
+        }
+    }
+
+    @Test
+    public void testExactEncoding() {
+        for (short half = -2048; half < 2048; half++) {
+            assertEquals(half, Half.shortBitsToFloat(Half.floatToShortBits(half)), 0, String.valueOf(half));
         }
     }
 
@@ -96,14 +101,14 @@ public class HalfTest {
         // TODO: More... But we just delegate to Float.toString, so no worries... :-)
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testParseHalfNull() {
-        Half.parseHalf(null);
+        assertThrows(NullPointerException.class, () -> Half.parseHalf(null));
     }
 
-    @Test(expected = NumberFormatException.class)
+    @Test
     public void testParseHalfBad() {
-        Half.parseHalf("foo");
+        assertThrows(NumberFormatException.class, () -> Half.parseHalf("foo"));
     }
 
     @Test
@@ -113,14 +118,14 @@ public class HalfTest {
         // TODO: More... But we just delegate to Float.valueOf, so no worries... :-)
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testValueOfNull() {
-        Half.valueOf(null);
+        assertThrows(NullPointerException.class, () -> Half.valueOf(null));
     }
 
-    @Test(expected = NumberFormatException.class)
+    @Test
     public void testValueOfBad() {
-        Half.valueOf("foo");
+        assertThrows(NumberFormatException.class, () -> Half.valueOf("foo"));
     }
 
     @Test
