@@ -4,13 +4,13 @@
     <parent>
         <groupId>com.twelvemonkeys.common</groupId>
         <artifactId>common</artifactId>
-        <version>3.10.0-SNAPSHOT</version>
+        <version>3.12.1-SNAPSHOT</version>
     </parent>
     <artifactId>common-image</artifactId>
     <packaging>jar</packaging>
     <name>TwelveMonkeys :: Common :: Image</name>
     <description>
-        The TwelveMonkeys Common Image support
+        TwelveMonkeys Common image support classes.
     </description>
 
     <properties>
@@ -28,12 +28,14 @@
             <artifactId>common-io</artifactId>
         </dependency>
 
-        <dependency>
-            <groupId>jmagick</groupId>
-            <artifactId>jmagick</artifactId>
-            <version>6.6.9</version>
-            <optional>true</optional>
-            <scope>provided</scope>
-        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.felix</groupId>
+                <artifactId>maven-bundle-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 </project>

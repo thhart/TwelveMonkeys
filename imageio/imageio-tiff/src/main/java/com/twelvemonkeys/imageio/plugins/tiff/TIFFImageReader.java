@@ -514,18 +514,27 @@ public final class TIFFImageReader extends ImageReaderBase {
 
                         cs = profile == null ? ColorSpace.getInstance(ColorSpace.CS_GRAY) : ColorSpaces.createColorSpace(profile);
 
-                        if (cs == ColorSpace.getInstance(ColorSpace.CS_GRAY) && (bitsPerSample == 1 || bitsPerSample == 2 || bitsPerSample == 4 || bitsPerSample == 8 || bitsPerSample == 16 || bitsPerSample == 32)) {
+                        if (samplesPerPixel == significantSamples && cs == ColorSpace.getInstance(ColorSpace.CS_GRAY)
+                                && (bitsPerSample == 1 || bitsPerSample == 2 || bitsPerSample == 4 || bitsPerSample == 8 || bitsPerSample == 16 || bitsPerSample == 32)) {
                             return ImageTypeSpecifiers.createGrayscale(bitsPerSample, dataType);
                         }
                         else if (bitsPerSample == 1 || bitsPerSample == 2 || bitsPerSample == 4) {
+                            if (samplesPerPixel != significantSamples) {
+                                throw new IIOException(String.format("ExtraSamples not supported for Bi-level/Gray TIFF with < 8 bitsPerSample: %d", bitsPerSample));
+                            }
+
                             // Use packed format for 1/2/4 bits
                             return ImageTypeSpecifiers.createPackedGrayscale(cs, bitsPerSample, dataType);
                         }
                         else if (bitsPerSample == 8 || bitsPerSample == 16 || bitsPerSample == 32) {
-                            return createImageTypeSpecifier(TIFFBaseline.PLANARCONFIG_CHUNKY, cs, dataType, significantSamples, samplesPerPixel, false, false);
+                            return createImageTypeSpecifier(planarConfiguration, cs, dataType, significantSamples, samplesPerPixel, hasAlpha, isAlphaPremultiplied);
                         }
                         else if (bitsPerSample % 2 == 0) {
-                            ColorModel colorModel = new ComponentColorModel(cs, new int[] {bitsPerSample}, false, false, Transparency.OPAQUE, dataType);
+                            int[] bits = new int[samplesPerPixel];
+                            Arrays.fill(bits, bitsPerSample);
+                            ColorModel colorModel = samplesPerPixel > significantSamples
+                                    ? new ExtraSamplesColorModel(cs, bits, false, false, dataType, samplesPerPixel - significantSamples)
+                                    : new ComponentColorModel(cs, bits, false, false, Transparency.OPAQUE, dataType);
                             return new ImageTypeSpecifier(colorModel, colorModel.createCompatibleSampleModel(1, 1));
                         }
 
@@ -709,7 +718,7 @@ public final class TIFFImageReader extends ImageReaderBase {
         }
     }
 
-    private static int[] createOffsets(int samplesPerPixel) {
+    static int[] createOffsets(int samplesPerPixel) {
         int[] offsets = new int[samplesPerPixel];
         for (int i = 0; i < samplesPerPixel; i++) {
             offsets[i] = i;
@@ -800,6 +809,7 @@ public final class TIFFImageReader extends ImageReaderBase {
             case TIFFBaseline.SAMPLEFORMAT_UINT:
                 return bitsPerSample <= 8 ? DataBuffer.TYPE_BYTE : bitsPerSample <= 16 ? DataBuffer.TYPE_USHORT : DataBuffer.TYPE_INT;
             case TIFFExtension.SAMPLEFORMAT_INT:
+            case TIFFExtension.SAMPLEFORMAT_COMPLEXINT:
                 switch (bitsPerSample) {
                     case 8:
                         return DataBuffer.TYPE_BYTE;
@@ -809,16 +819,20 @@ public final class TIFFImageReader extends ImageReaderBase {
                         return DataBuffer.TYPE_INT;
                 }
 
-                throw new IIOException("Unsupported BitsPerSample for SampleFormat 2/Signed Integer (expected 8/16/32): " + bitsPerSample);
+                throw new IIOException("Unsupported BitsPerSample for SampleFormat 2/Signed Integer, 5/Complex Integer (expected 8/16/32): " + bitsPerSample);
 
             case TIFFExtension.SAMPLEFORMAT_FP:
+            case TIFFExtension.SAMPLEFORMAT_COMPLEXIEEEFP:
                 if (bitsPerSample == 16 || bitsPerSample == 32) {
                     return DataBuffer.TYPE_FLOAT;
                 }
+                else if (bitsPerSample == 64) {
+                    return DataBuffer.TYPE_DOUBLE;
+                }
 
-                throw new IIOException("Unsupported BitsPerSample for SampleFormat 3/Floating Point (expected 16/32): " + bitsPerSample);
+                throw new IIOException("Unsupported BitsPerSample for SampleFormat 3/Floating Point, 6/Complex Floating Point (expected 16/32/64): " + bitsPerSample);
             default:
-                throw new IIOException("Unknown TIFF SampleFormat (expected 1, 2, 3 or 4): " + sampleFormat);
+                throw new IIOException("Unknown TIFF SampleFormat (expected 1, 2, 3, 4, 5 or 6): " + sampleFormat);
         }
     }
 
@@ -930,6 +944,10 @@ public final class TIFFImageReader extends ImageReaderBase {
 
     @Override
     public BufferedImage read(int imageIndex, ImageReadParam param) throws IOException {
+        return read(imageIndex, param, true);
+    }
+
+    private BufferedImage read(int imageIndex, ImageReadParam param, boolean normalize) throws IOException {
         readIFD(imageIndex);
 
         int width = getWidth(imageIndex);
@@ -1118,7 +1136,7 @@ public final class TIFFImageReader extends ImageReaderBase {
                                 int compressedStripTileWidth = planarConfiguration == TIFFExtension.PLANARCONFIG_PLANAR && b > 0 && yCbCrSubsampling != null
                                                                ? ((stripTileWidth + yCbCrSubsampling[0] - 1) / yCbCrSubsampling[0])
                                                                : stripTileWidth;
-                                adapter = createDecompressorStream(compression, compressedStripTileWidth, samplesInTile, adapter);
+                                adapter = createDecompressorStream(compression, compressedStripTileWidth, stripTileHeight, samplesInTile, adapter);
                                 adapter = createUnpredictorStream(predictor, compressedStripTileWidth, samplesInTile, bitsPerSample, adapter, imageInput.getByteOrder());
                                 adapter = createYCbCrUpsamplerStream(interpretation, planarConfiguration, b, rowRaster.getTransferType(), yCbCrSubsampling, yCbCrPos, colsInTile, adapter, imageInput.getByteOrder());
 
@@ -1144,12 +1162,12 @@ public final class TIFFImageReader extends ImageReaderBase {
                                 }
 
                                 // Read a full strip/tile
-                                readStripTileData(clippedRow, srcRegion, xSub, ySub, b, samplesInTile, interpretation, destRaster, col, srcRow, colsInTile, rowsInTile, input);
+                                readStripTileData(clippedRow, srcRegion, xSub, ySub, b, samplesInTile, interpretation, destRaster, col, srcRow, colsInTile, rowsInTile, input, normalize);
                             }
                         }
 
                         // Need to do color normalization after reading all bands for planar
-                        if (planarConfiguration == TIFFExtension.PLANARCONFIG_PLANAR) {
+                        if (normalize && planarConfiguration == TIFFExtension.PLANARCONFIG_PLANAR) {
                             normalizeColorPlanar(interpretation, destRaster);
                         }
 
@@ -1246,15 +1264,17 @@ public final class TIFFImageReader extends ImageReaderBase {
                                     // We'll have to use readAsRaster and later apply color space conversion ourselves
                                     Raster raster = jpegReader.readRaster(0, jpegParam);
                                     // TODO: Refactor + duplicate this for all JPEG-in-TIFF cases
-                                    switch (raster.getTransferType()) {
-                                        case DataBuffer.TYPE_BYTE:
-                                            normalizeColor(interpretation, samplesInTile, ((DataBufferByte) raster.getDataBuffer()).getData());
-                                            break;
-                                        case DataBuffer.TYPE_USHORT:
-                                            normalizeColor(interpretation, samplesInTile, ((DataBufferUShort) raster.getDataBuffer()).getData());
-                                            break;
-                                        default:
-                                            throw new IllegalStateException("Unsupported transfer type: " + raster.getTransferType());
+                                    if (normalize) {
+                                        switch (raster.getTransferType()) {
+                                            case DataBuffer.TYPE_BYTE:
+                                                normalizeColor(interpretation, samplesInTile, ((DataBufferByte) raster.getDataBuffer()).getData());
+                                                break;
+                                            case DataBuffer.TYPE_USHORT:
+                                                normalizeColor(interpretation, samplesInTile, ((DataBufferUShort) raster.getDataBuffer()).getData());
+                                                break;
+                                            default:
+                                                throw new IllegalStateException("Unsupported transfer type: " + raster.getTransferType());
+                                        }
                                     }
 
                                     destination.getRaster().setDataElements(offset.x, offset.y, raster);
@@ -1414,7 +1434,9 @@ public final class TIFFImageReader extends ImageReaderBase {
                                         // Otherwise, it's likely CMYK or some other interpretation we don't need to convert.
                                         // We'll have to use readAsRaster and later apply color space conversion ourselves
                                         Raster raster = jpegReader.readRaster(0, jpegParam);
-                                        normalizeColor(interpretation, samplesInTile, ((DataBufferByte) raster.getDataBuffer()).getData());
+                                        if (normalize) {
+                                            normalizeColor(interpretation, samplesInTile, ((DataBufferByte) raster.getDataBuffer()).getData());
+                                        }
                                         destination.getRaster().setDataElements(offset.x, offset.y, raster);
                                     }
                                 }
@@ -1564,7 +1586,9 @@ public final class TIFFImageReader extends ImageReaderBase {
                                         // Otherwise, it's likely CMYK or some other interpretation we don't need to convert.
                                         // We'll have to use readAsRaster and later apply color space conversion ourselves
                                         Raster raster = jpegReader.readRaster(0, jpegParam);
-                                        normalizeColor(interpretation, samplesInTile, ((DataBufferByte) raster.getDataBuffer()).getData());
+                                        if (normalize) {
+                                            normalizeColor(interpretation, samplesInTile, ((DataBufferByte) raster.getDataBuffer()).getData());
+                                        }
                                         destination.getRaster().setDataElements(offset.x, offset.y, raster);
                                     }
                                 }
@@ -1920,7 +1944,7 @@ public final class TIFFImageReader extends ImageReaderBase {
     private void readStripTileData(final Raster tileRowRaster, final Rectangle srcRegion, final int xSub, final int ySub,
                                    final int band, final int numBands, final int interpretation,
                                    final WritableRaster raster, final int startCol, final int startRow,
-                                   final int colsInTile, final int rowsInTile, final ImageInputStream input)
+                                   final int colsInTile, final int rowsInTile, final ImageInputStream input, final boolean normalize)
             throws IOException {
 
         DataBuffer dataBuffer = tileRowRaster.getDataBuffer();
@@ -1950,7 +1974,7 @@ public final class TIFFImageReader extends ImageReaderBase {
                     input.readFully(rowDataByte);
 
                     if (row % ySub == 0 && row >= srcRegion.y) {
-                        if (!banded) {
+                        if (normalize && !banded) {
                             normalizeColor(interpretation, numBands, rowDataByte);
                         }
 
@@ -1981,7 +2005,9 @@ public final class TIFFImageReader extends ImageReaderBase {
                     input.readFully(rowDataShort, 0, rowDataShort.length);
 
                     if (row >= srcRegion.y) {
-                        normalizeColor(interpretation, numBands, rowDataShort);
+                        if (normalize) {
+                            normalizeColor(interpretation, numBands, rowDataShort);
+                        }
 
                         // Subsample horizontal
                         subsampleRow(rowDataShort, srcRegion.x * numBands, colsInTile,
@@ -2009,7 +2035,9 @@ public final class TIFFImageReader extends ImageReaderBase {
                     input.readFully(rowDataInt, 0, rowDataInt.length);
 
                     if (row >= srcRegion.y) {
-                        normalizeColor(interpretation, numBands, rowDataInt);
+                        if (normalize) {
+                            normalizeColor(interpretation, numBands, rowDataInt);
+                        }
 
                         // Subsample horizontal
                         subsampleRow(rowDataInt, srcRegion.x * numBands, colsInTile,
@@ -2043,13 +2071,45 @@ public final class TIFFImageReader extends ImageReaderBase {
                     }
 
                     if (row >= srcRegion.y) {
-                        normalizeColor(interpretation, numBands, rowDataFloat);
+                        if (normalize) {
+                            normalizeColor(interpretation, numBands, rowDataFloat);
+                        }
 
                         // Subsample horizontal
                         if (xSub != 1) {
                             for (int x = srcRegion.x / xSub * numBands; x < ((srcRegion.x + srcRegion.width) / xSub) * numBands; x += numBands) {
                                 System.arraycopy(rowDataFloat, x * xSub, rowDataFloat, x, numBands);
                             }
+                        }
+
+                        destChannel.setDataElements(startCol, row - srcRegion.y, srcChannel);
+                    }
+                    // Else skip data
+                }
+            }
+
+            break;
+
+            case DataBuffer.TYPE_DOUBLE:
+                /*for (int band = 0; band < bands; band++)*/ {
+                double[] rowDataDouble = ((DataBufferDouble) tileRowRaster.getDataBuffer()).getData(band);
+
+                for (int row = startRow; row < startRow + rowsInTile; row++) {
+                    if (row >= srcRegion.y + srcRegion.height) {
+                        break; // We're done with this tile
+                    }
+
+                    input.readFully(rowDataDouble, 0, rowDataDouble.length);
+
+                    if (row >= srcRegion.y) {
+                        if (normalize) {
+                            normalizeColor(interpretation, numBands, rowDataDouble);
+                        }
+
+                        // Subsample horizontal
+                        if (xSub != 1) {
+                            subsampleRow(rowDataDouble, srcRegion.x * numBands, colsInTile,
+                                    rowDataDouble, srcRegion.x * numBands / xSub, numBands, bitsPerSample, xSub);
                         }
 
                         destChannel.setDataElements(startCol, row - srcRegion.y, srcChannel);
@@ -2071,13 +2131,24 @@ public final class TIFFImageReader extends ImageReaderBase {
         }
     }
 
-    private void clamp(final float[] rowDataFloat) {
-        for (int i = 0; i < rowDataFloat.length; i++) {
-            if (rowDataFloat[i] > 1f) {
-                rowDataFloat[i] = 1f;
+    private void clamp(final float[] data) {
+        for (int i = 0; i < data.length; i++) {
+            if (data[i] > 1f) {
+                data[i] = 1f;
             }
-            else if (rowDataFloat[i] < 0f) {
-                rowDataFloat[i] = 0f;
+            else if (data[i] < 0f) {
+                data[i] = 0f;
+            }
+        }
+    }
+
+    private void clamp(final double[] data) {
+        for (int i = 0; i < data.length; i++) {
+            if (data[i] > 1d) {
+                data[i] = 1d;
+            }
+            else if (data[i] < 0d) {
+                data[i] = 0d;
             }
         }
     }
@@ -2375,6 +2446,28 @@ public final class TIFFImageReader extends ImageReaderBase {
         }
     }
 
+    private void normalizeColor(int photometricInterpretation, @SuppressWarnings("unused") int numBands, double[] data) {
+        // TODO: Allow param to decide tone mapping strategy, like in the HDRImageReader
+        clamp(data);
+
+        switch (photometricInterpretation) {
+            case TIFFBaseline.PHOTOMETRIC_WHITE_IS_ZERO:
+                // Inverse values
+                for (int i = 0; i < data.length; i++) {
+                    data[i] = 1d - data[i];
+                }
+
+                break;
+
+            case TIFFExtension.PHOTOMETRIC_CIELAB:
+            case TIFFExtension.PHOTOMETRIC_ICCLAB:
+            case TIFFExtension.PHOTOMETRIC_ITULAB:
+            case TIFFExtension.PHOTOMETRIC_YCBCR:
+                // Not supported
+                break;
+        }
+    }
+
     private void convertYCbCr2RGB(final short[] yCbCr, final short[] rgb, final double[] coefficients, final double[] referenceBW, final int offset) {
         double y;
         double cb;
@@ -2415,7 +2508,7 @@ public final class TIFFImageReader extends ImageReaderBase {
         return (short) Math.max(0, Math.min(0xffff, val));
     }
 
-    private InputStream createDecompressorStream(final int compression, final int width, final int bands, InputStream stream) throws IOException {
+    private InputStream createDecompressorStream(final int compression, final int width, final int height, final int bands, InputStream stream) throws IOException {
         switch (compression) {
             case TIFFBaseline.COMPRESSION_NONE:
                 return stream;
@@ -2436,7 +2529,7 @@ public final class TIFFImageReader extends ImageReaderBase {
                 if (overrideCCITTCompression == -1) {
                     overrideCCITTCompression = findCCITTType(compression, stream);
                 }
-                return new CCITTFaxDecoderStream(stream, width, overrideCCITTCompression, getCCITTOptions(compression), compression == TIFFBaseline.COMPRESSION_CCITT_MODIFIED_HUFFMAN_RLE);
+                return new CCITTFaxDecoderStream(stream, width, height, overrideCCITTCompression, getCCITTOptions(compression), compression == TIFFBaseline.COMPRESSION_CCITT_MODIFIED_HUFFMAN_RLE);
             default:
                 throw new IllegalArgumentException("Unsupported TIFF compression: " + compression);
         }
@@ -2605,7 +2698,7 @@ public final class TIFFImageReader extends ImageReaderBase {
 
     @Override
     public Raster readRaster(int imageIndex, ImageReadParam param) throws IOException {
-        return read(imageIndex, param).getData();
+        return read(imageIndex, param, false).getData();
     }
 
     /// Tiling support

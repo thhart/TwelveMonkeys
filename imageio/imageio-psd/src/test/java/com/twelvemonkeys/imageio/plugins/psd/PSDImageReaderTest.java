@@ -33,7 +33,6 @@ package com.twelvemonkeys.imageio.plugins.psd;
 import com.twelvemonkeys.imageio.util.ImageReaderAbstractTest;
 import com.twelvemonkeys.imageio.util.ProgressListenerBase;
 
-import org.junit.Test;
 import org.w3c.dom.NodeList;
 
 import javax.imageio.ImageIO;
@@ -47,14 +46,17 @@ import javax.imageio.stream.ImageInputStream;
 import java.awt.*;
 import java.awt.color.*;
 import java.awt.image.*;
+import java.io.EOFException;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
-import static org.junit.Assert.*;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * PSDImageReaderTest
@@ -108,7 +110,9 @@ public class PSDImageReaderTest extends ImageReaderAbstractTest<PSDImageReader> 
                 // CMYK, uncompressed + contains some uncommon MeSa (instead of 8BIM) resource blocks
                 new TestData(getClassLoaderResource("/psd/fruit-cmyk-MeSa-resource.psd"), new Dimension(400, 191)),
                 // 3 channel, RGB, 32 bit samples
-                new TestData(getClassLoaderResource("/psd/32bit5x5.psd"), new Dimension(5, 5))
+                new TestData(getClassLoaderResource("/psd/32bit5x5.psd"), new Dimension(5, 5)),
+                // 3 channel, RGB, written by GIMP, compressed with PackBits runs longer than the row length
+                new TestData(getClassLoaderResource("/psd/gimp-32x32-packbits-overflow.psd"), new Dimension(32, 32))
                 // TODO: Need more recent ZIP compressed PSD files from CS2/CS3+
         );
     }
@@ -241,7 +245,7 @@ public class PSDImageReaderTest extends ImageReaderAbstractTest<PSDImageReader> 
                 fail("Expected IndexOutOfBoundsException");
             }
             catch (IndexOutOfBoundsException expected) {
-                assertTrue(expected.getMessage(), expected.getMessage().toLowerCase().contains("index"));
+                assertTrue(expected.getMessage().toLowerCase().contains("index"), expected.getMessage());
             }
 
             try {
@@ -249,7 +253,7 @@ public class PSDImageReaderTest extends ImageReaderAbstractTest<PSDImageReader> 
                 fail("Expected IndexOutOfBoundsException");
             }
             catch (IndexOutOfBoundsException expected) {
-                assertTrue(expected.getMessage(), expected.getMessage().toLowerCase().contains("index"));
+                assertTrue(expected.getMessage().toLowerCase().contains("index"), expected.getMessage());
             }
 
             try {
@@ -258,7 +262,7 @@ public class PSDImageReaderTest extends ImageReaderAbstractTest<PSDImageReader> 
             }
             catch (IndexOutOfBoundsException expected) {
                 // Sloppy...
-                assertTrue(expected.getMessage(), expected.getMessage().toLowerCase().contains("-2"));
+                assertTrue(expected.getMessage().toLowerCase().contains("-2"), expected.getMessage());
             }
 
             try {
@@ -266,7 +270,7 @@ public class PSDImageReaderTest extends ImageReaderAbstractTest<PSDImageReader> 
                 fail("Expected IndexOutOfBoundsException");
             }
             catch (IndexOutOfBoundsException expected) {
-                assertTrue(expected.getMessage(), expected.getMessage().toLowerCase().contains("index"));
+                assertTrue(expected.getMessage().toLowerCase().contains("index"), expected.getMessage());
             }
         }
     }
@@ -309,7 +313,7 @@ public class PSDImageReaderTest extends ImageReaderAbstractTest<PSDImageReader> 
                 @Override
                 public void thumbnailProgress(final ImageReader pSource, final float pPercentageDone) {
                     // Optional
-                    assertEquals("Listener invoked out of sequence", 1, seqeunce.size());
+                    assertEquals(1, seqeunce.size(), "Listener invoked out of sequence");
                     assertTrue(pPercentageDone >= lastPercentageDone);
                     lastPercentageDone = pPercentageDone;
                 }
@@ -318,7 +322,7 @@ public class PSDImageReaderTest extends ImageReaderAbstractTest<PSDImageReader> 
             BufferedImage thumbnail = imageReader.readThumbnail(0, 0);
             assertNotNull(thumbnail);
 
-            assertEquals("Listeners not invoked", 2, seqeunce.size());
+            assertEquals(2, seqeunce.size(), "Listeners not invoked");
             assertEquals("started", seqeunce.get(0));
             assertEquals("complete", seqeunce.get(1));
         }
@@ -373,7 +377,7 @@ public class PSDImageReaderTest extends ImageReaderAbstractTest<PSDImageReader> 
                     }
                 }
 
-                assertTrue("RAW image type not in type iterator", found);
+                assertTrue(found, "RAW image type not in type iterator");
             }
         }
     }
@@ -694,6 +698,31 @@ public class PSDImageReaderTest extends ImageReaderAbstractTest<PSDImageReader> 
             assertRGBEquals("RGB differ at (4,4)", 0xff888888, image.getRGB(4, 4), 4);
         }
     }
+
+    @Test
+    public void testBrokenPackBitsThrowsEOFException() throws IOException {
+        assertTimeoutPreemptively(Duration.ofMillis(1000), () -> {
+            PSDImageReader imageReader = createReader();
+
+            try (ImageInputStream stream = ImageIO.createImageInputStream(getClassLoaderResource("/broken-psd/short-packbits.psd"))) {
+                imageReader.setInput(stream);
+
+                assertEquals(1, imageReader.getNumImages(true));
+
+                assertEquals(427, imageReader.getWidth(0));
+                assertEquals(107, imageReader.getHeight(0));
+
+                try {
+                    imageReader.read(0);
+
+                    fail("Expected EOFException, is the test broken?");
+                } catch (EOFException expected) {
+                    assertTrue(expected.getMessage().contains("PackBits"));
+                }
+            }
+        });
+    }
+
 
     final static class FakeCMYKColorSpace extends ColorSpace {
         FakeCMYKColorSpace() {

@@ -40,7 +40,7 @@ import javax.imageio.spi.ServiceRegistry;
 import javax.imageio.stream.ImageInputStream;
 import javax.imageio.stream.ImageOutputStream;
 import java.awt.*;
-import java.awt.image.BufferedImage;
+import java.awt.image.*;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.InputStream;
@@ -232,6 +232,10 @@ public final class IIOUtil {
                                     int samplesPerPixel, int bitsPerSample, int samplePeriod) {
         // Period == 1 is a no-op...
         if (samplePeriod == 1) {
+            if (srcRow != destRow) {
+                System.arraycopy(srcRow, srcPos, destRow, destPos, srcWidth);
+            }
+
             return;
         }
 
@@ -275,6 +279,10 @@ public final class IIOUtil {
                                     int samplesPerPixel, int bitsPerSample, int samplePeriod) {
         // Period == 1 is a no-op...
         if (samplePeriod == 1) {
+            if (srcRow != destRow) {
+                System.arraycopy(srcRow, srcPos, destRow, destPos, srcWidth);
+            }
+
             return;
         }
 
@@ -283,7 +291,7 @@ public final class IIOUtil {
                 "bitsPerSample must be > 0 and <= 16 and a power of 2");
         Validate.isTrue(samplesPerPixel > 0, "samplesPerPixel must be > 0");
         Validate.isTrue(samplesPerPixel * bitsPerSample <= 16 || samplesPerPixel * bitsPerSample % 16 == 0,
-                "samplesPerPixel * bitsPerSample must be < 16 or a multiple of 16 ");
+                "samplesPerPixel * bitsPerSample must be < 16 or a multiple of 16");
 
         int pixelStride = bitsPerSample * samplesPerPixel / 16;
         for (int x = 0; x < srcWidth * pixelStride; x += samplePeriod * pixelStride) {
@@ -297,6 +305,10 @@ public final class IIOUtil {
                                     int samplesPerPixel, int bitsPerSample, int samplePeriod) {
         // Period == 1 is a no-op...
         if (samplePeriod == 1) {
+            if (srcRow != destRow) {
+                System.arraycopy(srcRow, srcPos, destRow, destPos, srcWidth);
+            }
+
             return;
         }
 
@@ -305,7 +317,7 @@ public final class IIOUtil {
                 "bitsPerSample must be > 0 and <= 32 and a power of 2");
         Validate.isTrue(samplesPerPixel > 0, "samplesPerPixel must be > 0");
         Validate.isTrue(samplesPerPixel * bitsPerSample <= 32 || samplesPerPixel * bitsPerSample % 32 == 0,
-                "samplesPerPixel * bitsPerSample must be < 32 or a multiple of 32 ");
+                "samplesPerPixel * bitsPerSample must be < 32 or a multiple of 32");
 
         int pixelStride = bitsPerSample * samplesPerPixel / 32;
         for (int x = 0; x < srcWidth * pixelStride; x += samplePeriod * pixelStride) {
@@ -322,9 +334,26 @@ public final class IIOUtil {
                 "bitsPerSample must be > 0 and <= 32 and a power of 2");
         Validate.isTrue(samplesPerPixel > 0, "samplesPerPixel must be > 0");
         Validate.isTrue(samplesPerPixel * bitsPerSample <= 32 || samplesPerPixel * bitsPerSample % 32 == 0,
-                "samplesPerPixel * bitsPerSample must be < 32 or a multiple of 32 ");
+                "samplesPerPixel * bitsPerSample must be < 32 or a multiple of 32");
 
         int pixelStride = bitsPerSample * samplesPerPixel / 32;
+        for (int x = 0; x < srcWidth * pixelStride; x += samplePeriod * pixelStride) {
+            // System.arraycopy should be intrinsic, but consider using direct array access for pixelStride == 1
+            System.arraycopy(srcRow, srcPos + x, destRow, destPos + x / samplePeriod, pixelStride);
+        }
+    }
+
+    public static void subsampleRow(double[] srcRow, int srcPos, int srcWidth,
+                                    double[] destRow, int destPos,
+                                    int samplesPerPixel, int bitsPerSample, int samplePeriod) {
+        Validate.isTrue(samplePeriod > 1, "samplePeriod must be > 1"); // Period == 1 could be a no-op...
+        Validate.isTrue(bitsPerSample > 0 && bitsPerSample <= 64 && (bitsPerSample == 1 || bitsPerSample % 2 == 0),
+                "bitsPerSample must be > 0 and <= 64 and a power of 2");
+        Validate.isTrue(samplesPerPixel > 0, "samplesPerPixel must be > 0");
+        Validate.isTrue(samplesPerPixel * bitsPerSample <= 64 || samplesPerPixel * bitsPerSample % 64 == 0,
+                "samplesPerPixel * bitsPerSample must be < 64 or a multiple of 64");
+
+        int pixelStride = bitsPerSample * samplesPerPixel / 64;
         for (int x = 0; x < srcWidth * pixelStride; x += samplePeriod * pixelStride) {
             // System.arraycopy should be intrinsic, but consider using direct array access for pixelStride == 1
             System.arraycopy(srcRow, srcPos + x, destRow, destPos + x / samplePeriod, pixelStride);

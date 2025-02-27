@@ -1,9 +1,12 @@
 [![CI](https://github.com/haraldk/TwelveMonkeys/actions/workflows/ci.yml/badge.svg)](https://github.com/haraldk/TwelveMonkeys/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/haraldk/TwelveMonkeys/actions/workflows/codeql.yml/badge.svg)](https://github.com/haraldk/TwelveMonkeys/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/haraldk/TwelveMonkeys/badge)](https://securityscorecards.dev/viewer/?uri=github.com/haraldk/TwelveMonkeys)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/7900/badge)](https://www.bestpractices.dev/projects/7900)
+
 [![Maven Central](https://img.shields.io/maven-central/v/com.twelvemonkeys.imageio/imageio?color=slateblue)](https://search.maven.org/search?q=g:com.twelvemonkeys.imageio)
 [![Maven Snapshot](https://img.shields.io/nexus/s/com.twelvemonkeys.imageio/imageio?label=development&server=https%3A%2F%2Foss.sonatype.org&color=slateblue)](https://oss.sonatype.org/content/repositories/snapshots/com/twelvemonkeys/)
 [![StackOverflow](https://img.shields.io/badge/stack_overflow-twelvemonkeys-orange.svg)](https://stackoverflow.com/questions/tagged/twelvemonkeys)
 [![Donate](https://img.shields.io/badge/donate-PayPal-blue.svg)](https://paypal.me/haraldk76/100)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/haraldk/TwelveMonkeys/badge)](https://securityscorecards.dev/viewer/?uri=github.com/haraldk/TwelveMonkeys)
 
 ![Logo](logo.png)
 
@@ -11,7 +14,7 @@
 
 TwelveMonkeys ImageIO provides extended image file format support for the Java platform, through plugins for the `javax.imageio.*` package.
 
-The main goal of this project is to provide support for formats not covered by the JRE itself. 
+The main goal of this project is to provide support for file formats not covered by the JDK. 
 Support for these formats is important, to be able to read data found
 "in the wild", as well as to maintain access to data in legacy formats.
 As there is lots of legacy data out there, we see the need for open implementations of readers for popular formats.
@@ -26,7 +29,8 @@ As there is lots of legacy data out there, we see the need for open implementati
 |        | WMF      | MS Windows Metafile                                     | ✔ |  -  | - | Requires [Batik](https://xmlgraphics.apache.org/batik/) |
 | [BMP](https://github.com/haraldk/TwelveMonkeys/wiki/BMP-Plugin)    | **BMP**  | MS Windows and IBM OS/2 Device Independent Bitmap       | ✔  |  ✔  | [Native](https://docs.oracle.com/en/java/javase/11/docs/api/java.desktop/javax/imageio/metadata/doc-files/bmp_metadata.html), [Standard](https://docs.oracle.com/en/java/javase/11/docs/api/java.desktop/javax/imageio/metadata/doc-files/standard_metadata.html) |
 |        | CUR      | MS Windows Cursor Format                                | ✔  |  -  | - |
-|        | ICO      | MS Windows Icon Format                                  | ✔  |  ✔  | - | 
+|        | ICO      | MS Windows Icon Format                                  | ✔  |  ✔  | - |
+| [DDS](https://github.com/haraldk/TwelveMonkeys/wiki/DDS-Plugin)   | DDS           | MS Direct Draw Surface Format                           | ✔  |  -  | [Standard](https://docs.oracle.com/en/java/javase/11/docs/api/java.desktop/javax/imageio/metadata/doc-files/standard_metadata.html) |
 | [HDR](https://github.com/haraldk/TwelveMonkeys/wiki/HDR-Plugin)    | HDR      | Radiance High Dynamic Range RGBE Format                 | ✔  |  -  | [Standard](https://docs.oracle.com/en/java/javase/11/docs/api/java.desktop/javax/imageio/metadata/doc-files/standard_metadata.html) | 
 | [ICNS](https://github.com/haraldk/TwelveMonkeys/wiki/ICNS-Plugin)   | ICNS     | Apple Icon Image                                        | ✔  |  ✔  | -  | 
 | [IFF](https://github.com/haraldk/TwelveMonkeys/wiki/IFF-Plugin)    | IFF      | Commodore Amiga/Electronic Arts Interchange File Format | ✔  |  ✔  | [Standard](https://docs.oracle.com/en/java/javase/11/docs/api/java.desktop/javax/imageio/metadata/doc-files/standard_metadata.html) | 
@@ -219,6 +223,43 @@ BufferedImageOp ditherer = new DiffusionDither();
 BufferedImage output = ditherer.filter(input, null);
 ```
 
+#### Working with damaged images
+
+When using the normal patterns for loading images, trying to load a damaged image will result in an `IOException` being thrown.
+
+```java
+BufferedImage image = null;
+try {
+    image = ImageIO.read(file);
+} catch (IOException exception) {
+    // Handle, log a warning/error etc
+}
+```
+
+In this scenario, if the image is damaged, and `ImageIO.read` throws an exception, `image` is still `null` - it's not possible for a function to both return a value and throw an exception.
+
+However, in some cases it may be possible to get usable image data from a damaged image. The way to do this is use an `ImageReadParam` to set a `BufferedImage` as a destination.
+
+```java
+int width = reader.getWidth(0);
+int height = reader.getHeight(0);
+ImageTypeSpecifier imageType = reader.getRawImageType(0);
+BufferedImage image = imageType.createBufferedImage(width, height);
+
+ImageReadParam param = reader.getDefaultReadParam();
+param.setDestination(image);
+
+try {
+    reader.read(0, param);
+}
+catch (IOException e) {
+    // Handle, log a warning/error etc
+}
+```
+
+In theory this should work for all plugins, but the result is very much plugin/implementation specific. With some formats and some forms of damaged file, you may get an image that is mostly useful.
+However, you should be prepared for the possibility this just gives a blank or empty image.
+
 ## Building
 
 Download the project (using [Git](https://git-scm.com/downloads)):
@@ -275,12 +316,12 @@ To depend on the JPEG and TIFF plugin using Maven, add the following to your POM
     <dependency>
         <groupId>com.twelvemonkeys.imageio</groupId>
         <artifactId>imageio-jpeg</artifactId>
-        <version>3.9.4</version>
+        <version>3.12.0</version>
     </dependency>
     <dependency>
         <groupId>com.twelvemonkeys.imageio</groupId>
         <artifactId>imageio-tiff</artifactId>
-        <version>3.9.4</version>
+        <version>3.12.0</version>
     </dependency>
 
     <!--
@@ -290,7 +331,7 @@ To depend on the JPEG and TIFF plugin using Maven, add the following to your POM
     <dependency>
         <groupId>com.twelvemonkeys.servlet</groupId>
         <artifactId>servlet</artifactId>
-        <version>3.9.4</version>
+        <version>3.12.0</version>
     </dependency>
 
     <!--
@@ -299,7 +340,7 @@ To depend on the JPEG and TIFF plugin using Maven, add the following to your POM
     <dependency>
         <groupId>com.twelvemonkeys.servlet</groupId>
         <artifactId>servlet</artifactId>
-        <version>3.9.4</version>
+        <version>3.12.0</version>
         <classifier>jakarta</classifier>
     </dependency>
 </dependencies>
@@ -309,18 +350,18 @@ To depend on the JPEG and TIFF plugin using Maven, add the following to your POM
 
 To depend on the JPEG and TIFF plugin in your IDE or program, add all of the following JARs to your class path:
 
-    twelvemonkeys-common-lang-3.9.4.jar
-    twelvemonkeys-common-io-3.9.4.jar
-    twelvemonkeys-common-image-3.9.4.jar
-    twelvemonkeys-imageio-core-3.9.4.jar
-    twelvemonkeys-imageio-metadata-3.9.4.jar
-    twelvemonkeys-imageio-jpeg-3.9.4.jar
-    twelvemonkeys-imageio-tiff-3.9.4.jar
+    twelvemonkeys-common-lang-3.12.0.jar
+    twelvemonkeys-common-io-3.12.0.jar
+    twelvemonkeys-common-image-3.12.0.jar
+    twelvemonkeys-imageio-core-3.12.0.jar
+    twelvemonkeys-imageio-metadata-3.12.0.jar
+    twelvemonkeys-imageio-jpeg-3.12.0.jar
+    twelvemonkeys-imageio-tiff-3.12.0.jar
 
 #### Deploying the plugins in a web app
 
-Because the `ImageIO` plugin registry (the `IIORegistry`) is "VM global", it doesn't by default work well with
-servlet contexts. This is especially evident if you load plugins from the `WEB-INF/lib` or `classes` folder.
+Because the `ImageIO` plugin registry (the `IIORegistry`) is "VM global", it does not work well with
+servlet contexts as-is. This is especially evident if you load plugins from the `WEB-INF/lib` or `classes` folder.
 Unless you add `ImageIO.scanForPlugins()` somewhere in your code, the plugins might never be available at all.
 
 In addition, servlet contexts dynamically loads and unloads classes (using a new class loader per context).
@@ -356,6 +397,16 @@ or other ImageIO plugins as well.
 
 Another safe option, is to place the JAR files in the application server's shared or common lib folder. 
 
+##### Jakarta Servlet Support
+
+For those transitioning from the old `javax.servlet` to the new `jakarta.servlet` package, there is a separate 
+dependency available. It contains exactly the same servlet classes as mentioned above, but built against the new Jakarta EE
+packages. The dependency has the same group name and identifier as before, but a `jakarta` *classifier* appended, to 
+distinguish it from the non-Jakarta package.
+
+See the [Maven dependency example](#maven-dependency-example) for how to enable it with Maven. 
+Gradle or other build tools will have similar options.
+
 #### Including the plugins in a "fat" JAR
 
 The recommended way to use the plugins, is just to include the JARs as-is in your project, through a Maven dependency or similar. 
@@ -381,44 +432,46 @@ Other "fat" JAR bundlers will probably have similar mechanisms to merge entries 
 
 ### Links to prebuilt binaries
 
-##### Latest version (3.9.4)
+##### Latest version (3.12.0)
 
 The latest version that will run on Java 7 is 3.9.4. Later versions will require Java 8 or later.
  
 Common dependencies
-* [common-lang-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/common/common-lang/3.9.4/common-lang-3.9.4.jar)
-* [common-io-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/common/common-io/3.9.4/common-io-3.9.4.jar)
-* [common-image-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/common/common-image/3.9.4/common-image-3.9.4.jar)
+* [common-lang-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/common/common-lang/3.12.0/common-lang-3.12.0.jar)
+* [common-io-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/common/common-io/3.12.0/common-io-3.12.0.jar)
+* [common-image-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/common/common-image/3.12.0/common-image-3.12.0.jar)
 
 ImageIO dependencies
-* [imageio-core-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-core/3.9.4/imageio-core-3.9.4.jar)
-* [imageio-metadata-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-metadata/3.9.4/imageio-metadata-3.9.4.jar)
+* [imageio-core-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-core/3.12.0/imageio-core-3.12.0.jar)
+* [imageio-metadata-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-metadata/3.12.0/imageio-metadata-3.12.0.jar)
 
 ImageIO plugins
-* [imageio-bmp-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-bmp/3.9.4/imageio-bmp-3.9.4.jar)
-* [imageio-hdr-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-hdr/3.9.4/imageio-hdr-3.9.4.jar)
-* [imageio-icns-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-icns/3.9.4/imageio-icns-3.9.4.jar)
-* [imageio-iff-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-iff/3.9.4/imageio-iff-3.9.4.jar)
-* [imageio-jpeg-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-jpeg/3.9.4/imageio-jpeg-3.9.4.jar)
-* [imageio-pcx-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-pcx/3.9.4/imageio-pcx-3.9.4.jar)
-* [imageio-pict-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-pict/3.9.4/imageio-pict-3.9.4.jar)
-* [imageio-pnm-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-pnm/3.9.4/imageio-pnm-3.9.4.jar)
-* [imageio-psd-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-psd/3.9.4/imageio-psd-3.9.4.jar)
-* [imageio-sgi-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-sgi/3.9.4/imageio-sgi-3.9.4.jar)
-* [imageio-tga-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-tga/3.9.4/imageio-tga-3.9.4.jar)
-* [imageio-thumbsdb-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-thumbsdb/3.9.4/imageio-thumbsdb-3.9.4.jar)
-* [imageio-tiff-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-tiff/3.9.4/imageio-tiff-3.9.4.jar)
-* [imageio-webp-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-webp/3.9.4/imageio-webp-3.9.4.jar)
-* [imageio-xwd-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-xwd/3.9.4/imageio-xwd-3.9.4.jar)
+* [imageio-bmp-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-bmp/3.12.0/imageio-bmp-3.12.0.jar)
+* [imageio-dds-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-dds/3.12.0/imageio-dds-3.12.0.jar)
+* [imageio-hdr-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-hdr/3.12.0/imageio-hdr-3.12.0.jar)
+* [imageio-icns-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-icns/3.12.0/imageio-icns-3.12.0.jar)
+* [imageio-iff-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-iff/3.12.0/imageio-iff-3.12.0.jar)
+* [imageio-jpeg-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-jpeg/3.12.0/imageio-jpeg-3.12.0.jar)
+* [imageio-pcx-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-pcx/3.12.0/imageio-pcx-3.12.0.jar)
+* [imageio-pict-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-pict/3.12.0/imageio-pict-3.12.0.jar)
+* [imageio-pnm-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-pnm/3.12.0/imageio-pnm-3.12.0.jar)
+* [imageio-psd-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-psd/3.12.0/imageio-psd-3.12.0.jar)
+* [imageio-sgi-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-sgi/3.12.0/imageio-sgi-3.12.0.jar)
+* [imageio-tga-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-tga/3.12.0/imageio-tga-3.12.0.jar)
+* [imageio-thumbsdb-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-thumbsdb/3.12.0/imageio-thumbsdb-3.12.0.jar)
+* [imageio-tiff-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-tiff/3.12.0/imageio-tiff-3.12.0.jar)
+* [imageio-webp-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-webp/3.12.0/imageio-webp-3.12.0.jar)
+* [imageio-xwd-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-xwd/3.12.0/imageio-xwd-3.12.0.jar)
 
 ImageIO plugins requiring 3rd party libs
-* [imageio-batik-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-batik/3.9.4/imageio-batik-3.9.4.jar)
+* [imageio-batik-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-batik/3.12.0/imageio-batik-3.12.0.jar)
 
 Photoshop Path support for ImageIO
-* [imageio-clippath-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-clippath/3.9.4/imageio-clippath-3.9.4.jar)
+* [imageio-clippath-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/imageio/imageio-clippath/3.12.0/imageio-clippath-3.12.0.jar)
 
 Servlet support
-* [servlet-3.9.4.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/servlet/servlet/3.9.4/servlet-3.9.4.jar)
+* [servlet-3.12.0.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/servlet/servlet/3.12.0/servlet-3.12.0.jar) for legacy Java EE (javax.servlet)
+* [servlet-3.12.0-jakarta.jar](https://search.maven.org/remotecontent?filepath=com/twelvemonkeys/servlet/servlet/3.12.0/servlet-3.12.0-jakrta.jar) for Jakarta EE (jakarta.servlet)
 
 ## License
 

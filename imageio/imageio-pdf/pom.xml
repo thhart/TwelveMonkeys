@@ -4,7 +4,7 @@
     <parent>
         <groupId>com.twelvemonkeys.imageio</groupId>
         <artifactId>imageio</artifactId>
-        <version>3.10.0-SNAPSHOT</version>
+        <version>3.12.1-SNAPSHOT</version>
     </parent>
     <artifactId>imageio-pdf</artifactId>
     <name>TwelveMonkeys :: ImageIO :: PDF plugin</name>
@@ -28,4 +28,13 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.felix</groupId>
+                <artifactId>maven-bundle-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 </project>

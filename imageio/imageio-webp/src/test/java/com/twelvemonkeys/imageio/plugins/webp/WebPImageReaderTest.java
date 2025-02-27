@@ -2,8 +2,6 @@ package com.twelvemonkeys.imageio.plugins.webp;
 
 import com.twelvemonkeys.imageio.util.ImageReaderAbstractTest;
 
-import org.junit.Test;
-
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReadParam;
 import javax.imageio.ImageTypeSpecifier;
@@ -16,7 +14,8 @@ import java.io.IOException;
 import java.util.List;
 
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * WebPImageReaderTest
@@ -60,7 +59,9 @@ public class WebPImageReaderTest extends ImageReaderAbstractTest<WebPImageReader
                         new Dimension(394, 383), new Dimension(394, 394), new Dimension(372, 394),
                         new Dimension(400, 400), new Dimension(320, 382)),
                 // Alpha transparency and Alpha filtering
-                new TestData(getClassLoaderResource("/webp/alpha_filter.webp"), new Dimension(1600, 1600))
+                new TestData(getClassLoaderResource("/webp/alpha_filter.webp"), new Dimension(1600, 1600)),
+                // Lossy with grayscale ICC profile
+                new TestData(getClassLoaderResource("/webp/incompatible-icc-gray.webp"), new Dimension(766, 1100))
         );
     }
 
